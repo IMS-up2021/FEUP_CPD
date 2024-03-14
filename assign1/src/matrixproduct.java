@@ -72,10 +72,9 @@ public class MatrixProduct{
         Time1 = System.currentTimeMillis();
 
         for (int i = 0; i < m_ar; i++) {
-            for (int j = 0; j < m_br; j++) {
-                phc[i * m_ar + j] = 0;
+            for (int j = 0; j < m_ar; j++) {
                 for (int k = 0; k < m_ar; k++) {
-                    phc[i * m_ar + j] += a[i * m_ar + k] * phb[k * m_br + j];
+                    phc[i * m_ar + k] += a[i * m_ar + j] * phb[j * m_br + k];
                 }
             }
 	    }
@@ -97,9 +96,6 @@ public class MatrixProduct{
     public static void OnMultBlock(int m_ar, int m_br, int bkSize){
         
         long Time1, Time2;
-
-        double[] a,b,c;
-        
         a = new double[m_ar * m_ar];
         b = new double[m_ar * m_ar];
         c = new double[m_ar * m_ar];
