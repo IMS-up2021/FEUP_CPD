@@ -1,42 +1,56 @@
-import java.util.Random;
 import java.util.Scanner;
-public class Game {
-    private final String[] WORDS = {"Foyer", "Louse", "Gloat", "Codon", "Finch", "Plane", "Voila", "Sweat", "Tasty", "Mouse", "Pixie", "Antic","Lemon", "Honey", "Queue", "Skirt", "Hello", "World", "Excel", "Brown", "Cache", "Water"};
-    private final int MAX_ATTEMPS = 6;
-    private String targetWord;
-    private int attemptsLeft;
+class Wordle{
+    public static void main(String[] args){
 
-    public Game(){
-        Random random = new Random();
-        targetWord = WORDS[random.nextInt(WORDS.length)];
-        attemptsLeft = MAX_ATTEMPS;
-    }
+        final String BG_GREEN = "\u001b[42m";
+        final String BG_YELLOW = "\u001b[43m";
+        final String RESET = "\u001b[0m";
 
-    public void play(){
-        Scanner scanner = new Scanner(System.in);
-        boolean wordGuessed = false;
-        while(attemptsLeft > 0 && !wordGuessed){
-            String guess = scanner.nextLine().toLowerCase();
+
+        System.out.println("WORDLE!");
+
+        String [] words = {"FOYER", "LOUSE", "GLOAT", "CODON", "FINCH", "PLANE", "VOILA", "SWEAT", "TASTY", "MOUSE", "PIXIE", "ANTIC", "LEMON", "HONEY", "QUEUE", "SKIRT", "HELLO", "WORLD", "EXCEL", "BROWN", "CACHE", "WATER"};
+
+        int index = (int)(Math.random()* words.length);
+        String correct = words[index];
+
+        Scanner reader = new Scanner(System.in);
+        String guess;
+
+        int attemps = 0;
+        //6 guesses
+        while(attemps < 6){
+            System.out.print("Make your guess: ");
+            guess = reader.nextLine().toUpperCase();
+
             if(guess.length()!=5){
+                System.out.println("Please write a 5 letter word!");
                 continue;
-            }
-            if(!guess.matches("[a-z]+")){
-                continue;
-            }
-            if(guess.equals(targetWord)){
-                wordGuessed = true;
             }
             else{
-                attemptsLeft--;
+                attemps++;
+            }
+
+            for(int j = 0; j < 5; j++){
+                //letter matches
+                if(guess.substring(j,j+1).equals(correct.substring(j,j+1))){
+                    System.out.print(BG_GREEN + guess.charAt(j) + RESET);
+                }
+                //leter on the wrong place
+                else if(correct.contains(guess.substring(j, j + 1))) {
+                    System.out.print(BG_YELLOW + guess.charAt(j) + RESET);
+                }
+                //letter doesn't exist
+                else{
+                    System.out.print(guess.charAt(j));
+                }
+            }
+            System.out.println("");
+            if(guess.equals(correct)){
+                System.out.println("YOU WON!");
+                break;
             }
         }
-        scanner.close();
-        if(wordGuessed){
-            System.out.println("YOU WON!");
-        }
-        else{
-            System.out.println("YOU LOST");
-        }
     }
-
 }
+
