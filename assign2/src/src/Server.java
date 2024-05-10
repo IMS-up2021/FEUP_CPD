@@ -19,9 +19,9 @@ public class Server {
     private Scanner scanner;
     private int i;
     public HashMap<Integer, String> words;
-    public static final String ANSI_RESET = "\u001B[0m";
-    public static final String ANSI_RED = "\u001B[31m";
-    public static final String ANSI_GREEN = "\n\u001B[32m";
+    final String BG_GREEN = "\u001b[42m";
+    final String BG_YELLOW = "\u001b[43m";
+    final String RESET = "\u001b[0m";
 
     public Server() throws Exception {
         console = new Scanner(System.in);
@@ -39,7 +39,7 @@ public class Server {
 
         // Infinite loop to start a new game after one ends
         while (true) {
-            System.out.println(ANSI_GREEN + "Creating New Lobby" + ANSI_RESET);
+            System.out.println(BG_GREEN + "Creating New Lobby" + RESET);
 
             // Getting lobby code from user
             System.out.println("Enter Lobby Code or \"q\" to close server");
@@ -85,12 +85,12 @@ public class Server {
                 startGame(3);
 
             } else {
-                System.out.println(ANSI_RED + "Invalid Lobby Size" + ANSI_RESET);
+                System.out.println(BG_YELLOW + "Invalid Lobby Size" + RESET);
             }
         }
 
         // Closing server after receiving quit event from user
-        System.out.println(ANSI_RED + "Closing Server" + ANSI_RESET);
+        System.out.println(BG_YELLOW + "Closing Server" + RESET);
         console.close();
         scanner.close();
         serverSocket.close();
@@ -144,13 +144,11 @@ public class Server {
         return words.get(random.nextInt(i)).toUpperCase();
     }
 
-    // Method to start a game based on the number of players
     public void startGame(int numPlayers) {
-        Game.wordle(numPlayers);
-    }
+        // Creating a new instance of Game
+        Game game = new Game();
 
-    // Main method, creates and starts a server
-    public static void main(String[] args) throws Exception {
-        new Server();
+        // Starting the game with the given number of players
+        game.wordle(numPlayers);
     }
 }
