@@ -1,11 +1,15 @@
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Scanner;
+import java.nio.file.Files;
 
 public class Server {
     private ServerSocket serverSocket;
@@ -16,7 +20,7 @@ public class Server {
     private Player playerTwo;
     private Player playerThree;
     private Random random;
-    private Scanner scanner;
+    public Scanner scanner;
     private int i;
     public HashMap<Integer, String> words;
     final String BG_GREEN = "\u001b[42m";
@@ -27,22 +31,21 @@ public class Server {
         console = new Scanner(System.in);
         serverSocket = new ServerSocket(6666);
         random = new Random();
-        scanner = new Scanner(getClass().getResourceAsStream("/resources/words.txt"));
-        words = new HashMap<>();
+        //words = new HashMap<>();
         i = 0;
 
-        // Adding all words from words.txt into words' hashmap
+        /*// Adding all words from words.txt into words' hashmap
         while (scanner.hasNextLine()) {
             words.put(i, scanner.nextLine());
             i++;
-        }
+        }*/
 
         // Infinite loop to start a new game after one ends
         while (true) {
             System.out.println(BG_GREEN + "Creating New Lobby" + RESET);
 
             // Getting lobby code from user
-            System.out.println("Enter Lobby Code or \"q\" to close server");
+            System.out.println("\"Enter\" for Lobby Code or \"q\" to close server");
             code = console.nextLine();
 
             // Checking if code is a quit event
@@ -151,4 +154,13 @@ public class Server {
         // Starting the game with the given number of players
         game.wordle(numPlayers);
     }
+
+    public void getWords(String s) {
+        try {
+            words = (HashMap<Integer, String>) Files.readAllLines(Paths.get(s));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 }
+
