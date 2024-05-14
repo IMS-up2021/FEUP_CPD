@@ -31,14 +31,7 @@ public class Server {
         console = new Scanner(System.in);
         serverSocket = new ServerSocket(6666);
         random = new Random();
-        //words = new HashMap<>();
         i = 0;
-
-        /*// Adding all words from words.txt into words' hashmap
-        while (scanner.hasNextLine()) {
-            words.put(i, scanner.nextLine());
-            i++;
-        }*/
 
         // Infinite loop to start a new game after one ends
         while (true) {
@@ -58,6 +51,7 @@ public class Server {
             lobbySize = console.nextLine();
 
             if (lobbySize.equals("2")) {
+                System.out.println("Lobby Size: 2");
 
                 // Getting first player
                 playerOne = getPlayer();
@@ -71,6 +65,7 @@ public class Server {
                 startGame(2);
 
             } else if (lobbySize.equals("3")) {
+                System.out.println("Lobby Size: 3");
 
                 // Getting first player
                 playerOne = getPlayer();
@@ -95,7 +90,6 @@ public class Server {
         // Closing server after receiving quit event from user
         System.out.println(BG_YELLOW + "Closing Server" + RESET);
         console.close();
-        scanner.close();
         serverSocket.close();
     }
 
