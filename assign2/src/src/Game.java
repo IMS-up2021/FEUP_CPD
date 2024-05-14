@@ -39,7 +39,7 @@ public class Game{
                     if (guess.substring(j, j + 1).equals(correct.substring(j, j + 1))) {
                         System.out.print(BG_GREEN + guess.charAt(j) + RESET);
                     }
-                    //leter on the wrong place
+                    //letter in the wrong place
                     else if (correct.contains(guess.substring(j, j + 1))) {
                         System.out.print(BG_YELLOW + guess.charAt(j) + RESET);
                     }
@@ -56,7 +56,7 @@ public class Game{
                     break;
                 }
             }
-            if(flag==true){
+            if(flag){
                 break;
             }
         }

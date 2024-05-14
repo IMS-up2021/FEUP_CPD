@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.Scanner;
 import java.nio.file.Files;
+import java.util.List;
 
 public class Server {
     private ServerSocket serverSocket;
@@ -20,6 +21,8 @@ public class Server {
     private Player playerTwo;
     private Player playerThree;
     private Random random;
+
+    private List<User> users;
     public Scanner scanner;
     private int i;
     public HashMap<Integer, String> words;
@@ -38,7 +41,7 @@ public class Server {
             System.out.println(BG_GREEN + "Creating New Lobby" + RESET);
 
             // Getting lobby code from user
-            System.out.println("\"Enter\" for Lobby Code or \"q\" to close server");
+            System.out.println("\"Enter\" for Lobby Cregode or \"q\" to close server");
             code = console.nextLine();
 
             // Checking if code is a quit event
@@ -155,5 +158,54 @@ public class Server {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    // if user exists and password is correct, return true; otherwise call registerUser and add it to users
+    public boolean checkUser (String username, String password) {
+        for (User user : users) {
+            if (user.getUsername().equals(username) && user.validatePassword(password)) {
+                return true;
+            }
+        }
+
+        // If user does not exist, register user
+        users.add(registerUser());
+        return false;
+    }
+    public User registerUser() {
+        System.out.println("User Registration");
+        System.out.println("Username:");
+        //input username
+        String username = console.nextLine();
+
+
+        while (true) {
+            boolean unique = true;
+            for (User user : users) {
+                if (user.getUsername().equals(username)) {
+                    unique = false;
+                    break;
+                }
+            }
+            if (unique) {
+                break;
+            } else {
+                System.out.println("Username already exists. Please enter a new username:");
+                username = console.nextLine();
+            }
+        }
+
+        System.out.println("Password:");
+        //input password
+        String password = console.nextLine();
+        //check if password has length between 4 and 16
+        while (password.length() < 4 || password.length() > 16) {
+            System.out.println("Password must be between 4 and 16 characters. Please enter a new password:");
+            password = console.nextLine();
+        }
+
+        return new User(username, password);
+
+
     }
 }
