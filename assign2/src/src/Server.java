@@ -5,10 +5,7 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Objects;
-import java.util.Random;
-import java.util.Scanner;
+import java.util.*;
 import java.nio.file.Files;
 
 public class Server {
@@ -22,7 +19,7 @@ public class Server {
     private Random random;
     public Scanner scanner;
     private int i;
-    public HashMap<Integer, String> words;
+    public ArrayList<String> words;
     final String BG_GREEN = "\u001b[42m";
     final String BG_YELLOW = "\u001b[43m";
     final String RESET = "\u001b[0m";
@@ -32,8 +29,9 @@ public class Server {
         serverSocket = new ServerSocket(6666);
         random = new Random();
         //words = new HashMap<>();
-        i = 0;
+        i = 1;
 
+        listWords("assign2/resources/words.txt");
         /*// Adding all words from words.txt into words' hashmap
         while (scanner.hasNextLine()) {
             words.put(i, scanner.nextLine());
@@ -57,7 +55,10 @@ public class Server {
             System.out.println("Enter Lobby Size");
             lobbySize = console.nextLine();
 
-            if (lobbySize.equals("2")) {
+            //temporario
+            startGame(1);
+
+            /*if (lobbySize.equals("2")) {
 
                 // Getting first player
                 playerOne = getPlayer();
@@ -89,7 +90,7 @@ public class Server {
 
             } else {
                 System.out.println(BG_YELLOW + "Invalid Lobby Size" + RESET);
-            }
+            }*/
         }
 
         // Closing server after receiving quit event from user
@@ -152,12 +153,12 @@ public class Server {
         Game game = new Game();
 
         // Starting the game with the given number of players
-        game.wordle(numPlayers);
+        game.wordle(numPlayers, getWord());
     }
 
-    public void getWords(String s) {
+    public void listWords(String s) {
         try {
-            words = (HashMap<Integer, String>) Files.readAllLines(Paths.get(s));
+            words = (ArrayList<String>) Files.readAllLines(Paths.get(s));
         } catch (IOException e) {
             e.printStackTrace();
         }
