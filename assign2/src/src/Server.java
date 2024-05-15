@@ -17,6 +17,7 @@ public class Server {
     private Random random;
 
     private List<User> users;
+    private List<User> authenticatedUsers;
     public Scanner scanner;
     private int i;
     public HashMap<Integer, String> words;
@@ -30,6 +31,8 @@ public class Server {
         random = new Random();
         users = new ArrayList<User>();
         getUsersFromFile();
+        authenticatedUsers = new ArrayList<User>();
+        authenticateUser();
         i = 0;
 
         // Infinite loop to start a new game after one ends
@@ -92,8 +95,8 @@ public class Server {
         serverSocket.close();
 
 
-
     }
+
 
     // Method that waits from a socket to make a connection then creates a Player using socket
     public Player getPlayer() throws Exception {
@@ -160,23 +163,28 @@ public class Server {
     }
 
     // if user exists and password is correct, return true; otherwise call registerUser and add it to users
-    public boolean checkUser (String username, String password) {
+    public boolean validateUser(String username, String password) {
         for (User user : users) {
-            if (user.getUsername().equals(username) && user.validatePassword(password)) {
-                return true;
+            if (user.getUsername().equals(username)) {
+                if (user.validatePassword(password)) {
+                    authenticatedUsers.add(user);
+                    return true;
+                }
+                else {
+                    System.out.println("Incorrect password");
+                    return false;
+                }
             }
         }
 
-        // If user does not exist, register user
-        registerUser();
         return false;
     }
+
     public void registerUser() {
         System.out.println("User Registration");
         System.out.println("Username:");
         //input username
         String username = console.nextLine();
-
 
         while (true) {
             boolean unique = true;
@@ -203,13 +211,21 @@ public class Server {
             password = console.nextLine();
         }
         User user = new User(username, password);
+        authenticatedUsers.add(user);
         users.add(user);
-        System.out.println("User registered successfully!");
+        //write user to file
+        try {
+            FileWriter writer = new FileWriter("assign2/resources/users.txt", true);
+            writer.write("\n"+username + "," + password);
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("User registered and authenticated successfully!");
 
+        }
     }
 
-
-    public void getUsersFromFile (){
+    public void getUsersFromFile() {
         try {
             ArrayList<String> lines = (ArrayList<String>) Files.readAllLines(Paths.get("assign2/resources/users.txt"));
             for (String line : lines) {
@@ -222,6 +238,51 @@ public class Server {
 
 
     }
+
+    public boolean authenticateUser() {
+        System.out.println("Enter username:");
+        String username = console.nextLine();
+        boolean userExists = checkUserExists(username);
+        if(userExists){
+            System.out.println("Enter password:");
+            String password = console.nextLine();
+            boolean authenticated = validateUser(username, password);
+            while(!authenticated) {
+                System.out.println("password:");
+                password = console.nextLine();
+                authenticated = validateUser(username, password);
+            }
+            System.out.println("User authenticated successfully.");
+            return true;
+
+        }
+        else {
+            System.out.println("User does not exist. Would you like to register?");
+            System.out.println("Enter 'y' for yes or 'n' for no.");
+            String response = console.nextLine();
+            if (response.equals("y")) {
+                registerUser();
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+    }
+
+    public boolean checkUserExists(String username) {
+        for (User user : users) {
+            if (user.getUsername().equals(username)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+
+
+
 }
 
 
