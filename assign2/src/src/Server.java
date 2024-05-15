@@ -1,16 +1,10 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
+
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Objects;
-import java.util.Random;
-import java.util.Scanner;
+import java.util.*;
 import java.nio.file.Files;
-import java.util.List;
 
 public class Server {
     private ServerSocket serverSocket;
@@ -34,6 +28,8 @@ public class Server {
         console = new Scanner(System.in);
         serverSocket = new ServerSocket(6666);
         random = new Random();
+        users = new ArrayList<User>();
+        getUsersFromFile();
         i = 0;
 
         // Infinite loop to start a new game after one ends
@@ -94,6 +90,9 @@ public class Server {
         System.out.println(BG_YELLOW + "Closing Server" + RESET);
         console.close();
         serverSocket.close();
+
+
+
     }
 
     // Method that waits from a socket to make a connection then creates a Player using socket
@@ -169,10 +168,10 @@ public class Server {
         }
 
         // If user does not exist, register user
-        users.add(registerUser());
+        registerUser();
         return false;
     }
-    public User registerUser() {
+    public void registerUser() {
         System.out.println("User Registration");
         System.out.println("Username:");
         //input username
@@ -203,9 +202,26 @@ public class Server {
             System.out.println("Password must be between 4 and 16 characters. Please enter a new password:");
             password = console.nextLine();
         }
+        User user = new User(username, password);
+        users.add(user);
+        System.out.println("User registered successfully!");
 
-        return new User(username, password);
+    }
+
+
+    public void getUsersFromFile (){
+        try {
+            ArrayList<String> lines = (ArrayList<String>) Files.readAllLines(Paths.get("assign2/resources/users.txt"));
+            for (String line : lines) {
+                String[] parts = line.split(",");
+                users.add(new User(parts[0], parts[1]));
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
 
     }
 }
+
+

@@ -1,6 +1,6 @@
 public class User {
     private final String username;
-    private String password;
+    private final String password;
 
     public User(String username, String password) {
         this.username = username;
@@ -13,5 +13,6 @@ public class User {
     public boolean validatePassword(String password) {
         return this.password.equals(password);
     }
+    public String getPassword() { return password;}
 
 }
