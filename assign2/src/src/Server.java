@@ -29,11 +29,11 @@ public class Server {
         serverSocket = new ServerSocket(6666);
         random = new Random();
         //words = new HashMap<>();
-        i = 1;
+        i = 2;
 
         listWords("assign2/resources/words.txt");
-        /*// Adding all words from words.txt into words' hashmap
-        while (scanner.hasNextLine()) {
+        // Adding all words from words.txt into words' hashmap
+        /*while (scanner.hasNextLine()) {
             words.put(i, scanner.nextLine());
             i++;
         }*/
@@ -56,7 +56,7 @@ public class Server {
             lobbySize = console.nextLine();
 
             //temporario
-            startGame(1);
+            startGame(2);
 
             /*if (lobbySize.equals("2")) {
 
