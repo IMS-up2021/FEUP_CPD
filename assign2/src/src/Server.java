@@ -15,32 +15,39 @@ public class Server {
     private Player playerTwo;
     private Player playerThree;
     private Random random;
-
-    private List<User> users;
-    private List<User> authenticatedUsers;
     public Scanner scanner;
     private int i;
-    public HashMap<Integer, String> words;
+    public ArrayList<String> words;
     final String BG_GREEN = "\u001b[42m";
     final String BG_YELLOW = "\u001b[43m";
     final String RESET = "\u001b[0m";
+    private List<User> users;
+    private List<User> authenticatedUsers;
 
     public Server() throws Exception {
         console = new Scanner(System.in);
         serverSocket = new ServerSocket(6666);
         random = new Random();
+        //words = new HashMap<>();
+        i = 1;
         users = new ArrayList<User>();
         getUsersFromFile();
         authenticatedUsers = new ArrayList<User>();
 
-        i = 0;
+        listWords("assign2/resources/words.txt");
+        /*// Adding all words from words.txt into words' hashmap
+        while (scanner.hasNextLine()) {
+            words.put(i, scanner.nextLine());
+            i++;
+        }*/
+
 
         // Infinite loop to start a new game after one ends
         while (true) {
             System.out.println(BG_GREEN + "Creating New Lobby" + RESET);
 
             // Getting lobby code from user
-            System.out.println("\"Enter\" for Lobby Cregode or \"q\" to close server");
+            System.out.println("\"Enter\" for Lobby Code or \"q\" to close server");
             code = console.nextLine();
 
             // Checking if code is a quit event
@@ -52,8 +59,10 @@ public class Server {
             System.out.println("Enter Lobby Size");
             lobbySize = console.nextLine();
 
-            if (lobbySize.equals("2")) {
-                System.out.println("Lobby Size: 2");
+            //temporario
+            startGame(1);
+
+            /*if (lobbySize.equals("2")) {
 
                 // Getting first player
                 playerOne = getPlayer();
@@ -67,7 +76,6 @@ public class Server {
                 startGame(2);
 
             } else if (lobbySize.equals("3")) {
-                System.out.println("Lobby Size: 3");
 
                 // Getting first player
                 playerOne = getPlayer();
@@ -86,15 +94,14 @@ public class Server {
 
             } else {
                 System.out.println(BG_YELLOW + "Invalid Lobby Size" + RESET);
-            }
+            }*/
         }
 
         // Closing server after receiving quit event from user
         System.out.println(BG_YELLOW + "Closing Server" + RESET);
         console.close();
+        scanner.close();
         serverSocket.close();
-
-
     }
 
 
@@ -141,6 +148,7 @@ public class Server {
         }
     }
 
+
     // Method to get random word
     public String getWord() {
         return words.get(random.nextInt(i)).toUpperCase();
@@ -151,12 +159,12 @@ public class Server {
         Game game = new Game();
 
         // Starting the game with the given number of players
-        game.wordle(numPlayers);
+        game.wordle(numPlayers, getWord());
     }
 
-    public void getWords(String s) {
+    public void listWords(String s) {
         try {
-            words = (HashMap<Integer, String>) Files.readAllLines(Paths.get(s));
+            words = (ArrayList<String>) Files.readAllLines(Paths.get(s));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -279,10 +287,4 @@ public class Server {
         return false;
     }
 
-
-
-
-
 }
-
-

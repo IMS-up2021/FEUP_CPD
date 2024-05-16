@@ -1,6 +1,6 @@
 import java.util.Scanner;
 public class Game{
-    public static void wordle(int number_players){
+    public static void wordle(int number_players, String word)  {
 
         final String BG_GREEN = "\u001b[42m";
         final String BG_YELLOW = "\u001b[43m";
@@ -9,10 +9,6 @@ public class Game{
 
         System.out.println("WORDLE!");
 
-        String [] words = {"FOYER", "LOUSE", "GLOAT", "CODON", "FINCH", "PLANE", "VOILA", "SWEAT", "TASTY", "MOUSE", "PIXIE", "ANTIC", "LEMON", "HONEY", "QUEUE", "SKIRT", "HELLO", "WORLD", "EXCEL", "BROWN", "CACHE", "WATER"};
-
-        int index = (int)(Math.random()* words.length);
-        String correct = words[index];
 
         Scanner reader = new Scanner(System.in);
         String guess;
@@ -34,13 +30,14 @@ public class Game{
                     player_number++;
                 }
 
+
                 for (int j = 0; j < 5; j++) {
                     //letter matches
-                    if (guess.substring(j, j + 1).equals(correct.substring(j, j + 1))) {
+                    if (guess.substring(j, j + 1).equals(word.substring(j, j + 1))) {
                         System.out.print(BG_GREEN + guess.charAt(j) + RESET);
                     }
-                    //letter in the wrong place
-                    else if (correct.contains(guess.substring(j, j + 1))) {
+                    //leter on the wrong place
+                    else if (word.contains(guess.substring(j, j + 1))) {
                         System.out.print(BG_YELLOW + guess.charAt(j) + RESET);
                     }
                     //letter doesn't exist
@@ -49,17 +46,16 @@ public class Game{
                     }
                 }
                 System.out.println("");
-                if (guess.equals(correct)) {
+                if (guess.equals(word)) {
                     player_number--;
                     System.out.println("PLAYER " + player_number + " WON!");
                     flag=true;
                     break;
                 }
             }
-            if(flag){
+            if(flag==true){
                 break;
             }
         }
     }
 }
-
