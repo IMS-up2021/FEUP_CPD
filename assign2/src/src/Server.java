@@ -1,7 +1,5 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
+
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Paths;
@@ -23,6 +21,8 @@ public class Server {
     final String BG_GREEN = "\u001b[42m";
     final String BG_YELLOW = "\u001b[43m";
     final String RESET = "\u001b[0m";
+    private List<User> users;
+    private List<User> authenticatedUsers;
 
     public Server() throws Exception {
         console = new Scanner(System.in);
@@ -30,13 +30,18 @@ public class Server {
         random = new Random();
         //words = new HashMap<>();
         i = 1;
+        users = new ArrayList<User>();
+        getUsersFromFile();
+        authenticatedUsers = new ArrayList<User>();
 
+        listWords("assign2/resources/words.txt");
         listWords("assign2/resources/words.txt");
         /*// Adding all words from words.txt into words' hashmap
         while (scanner.hasNextLine()) {
             words.put(i, scanner.nextLine());
             i++;
         }*/
+
 
         // Infinite loop to start a new game after one ends
         while (true) {
@@ -56,6 +61,9 @@ public class Server {
             lobbySize = console.nextLine();
 
             //temporario
+            startGame(1);
+
+            /*//temporario
             startGame(1);
 
             /*if (lobbySize.equals("2")) {
@@ -100,6 +108,7 @@ public class Server {
         serverSocket.close();
     }
 
+
     // Method that waits from a socket to make a connection then creates a Player using socket
     public Player getPlayer() throws Exception {
         Socket s;
@@ -143,6 +152,7 @@ public class Server {
         }
     }
 
+
     // Method to get random word
     public String getWord() {
         return words.get(random.nextInt(i)).toUpperCase();
@@ -163,5 +173,122 @@ public class Server {
             e.printStackTrace();
         }
     }
-}
 
+    // if user exists and password is correct, return true; otherwise call registerUser and add it to users
+    public boolean validateUser(String username, String password) {
+        for (User user : users) {
+            if (user.getUsername().equals(username)) {
+                if (user.validatePassword(password)) {
+                    authenticatedUsers.add(user);
+                    return true;
+                }
+                else {
+                    System.out.println("Incorrect password");
+                    return false;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public void registerUser() {
+        System.out.println("User Registration");
+        System.out.println("Username:");
+        //input username
+        String username = console.nextLine();
+
+        while (true) {
+            boolean unique = true;
+            for (User user : users) {
+                if (user.getUsername().equals(username)) {
+                    unique = false;
+                    break;
+                }
+            }
+            if (unique) {
+                break;
+            } else {
+                System.out.println("Username already exists. Please enter a new username:");
+                username = console.nextLine();
+            }
+        }
+
+        System.out.println("Password:");
+        //input password
+        String password = console.nextLine();
+        //check if password has length between 4 and 16
+        while (password.length() < 4 || password.length() > 16) {
+            System.out.println("Password must be between 4 and 16 characters. Please enter a new password:");
+            password = console.nextLine();
+        }
+        User user = new User(username, password);
+        authenticatedUsers.add(user);
+        users.add(user);
+        //write user to file
+        try {
+            FileWriter writer = new FileWriter("assign2/resources/users.txt", true);
+            writer.write("\n"+username + "," + password);
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("User registered and authenticated successfully!");
+
+        }
+    }
+
+    public void getUsersFromFile() {
+        try {
+            ArrayList<String> lines = (ArrayList<String>) Files.readAllLines(Paths.get("assign2/resources/users.txt"));
+            for (String line : lines) {
+                String[] parts = line.split(",");
+                users.add(new User(parts[0], parts[1]));
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
+    }
+
+    public boolean authenticateUser() {
+        System.out.println("Enter username:");
+        String username = console.nextLine();
+        boolean userExists = checkUserExists(username);
+        if(userExists){
+            System.out.println("Enter password:");
+            String password = console.nextLine();
+            boolean authenticated = validateUser(username, password);
+            while(!authenticated) {
+                System.out.println("password:");
+                password = console.nextLine();
+                authenticated = validateUser(username, password);
+            }
+            System.out.println("User authenticated successfully.");
+            return true;
+
+        }
+        else {
+            System.out.println("User does not exist. Would you like to register?");
+            System.out.println("Enter 'y' for yes or 'n' for no.");
+            String response = console.nextLine();
+            if (response.equals("y")) {
+                registerUser();
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+    }
+
+    public boolean checkUserExists(String username) {
+        for (User user : users) {
+            if (user.getUsername().equals(username)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+}
