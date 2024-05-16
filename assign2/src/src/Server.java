@@ -32,7 +32,7 @@ public class Server {
         users = new ArrayList<User>();
         getUsersFromFile();
         authenticatedUsers = new ArrayList<User>();
-        authenticateUser();
+
         i = 0;
 
         // Infinite loop to start a new game after one ends
