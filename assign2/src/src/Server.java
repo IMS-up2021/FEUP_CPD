@@ -61,7 +61,7 @@ public class Server {
             lobbySize = console.nextLine();
 
             //temporario
-            startGame(1);
+            startGame(2);
 
             /*//temporario
             startGame(1);
