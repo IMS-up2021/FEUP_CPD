@@ -1,65 +1,82 @@
+import java.io.*;
+import java.net.Socket;
+import java.util.List;
 import java.util.Scanner;
 public class Game{
-    public static void wordle(int number_players){
+    public static List<Player> wordle(List<Player> number_players, String word)  {
 
         final String BG_GREEN = "\u001b[42m";
         final String BG_YELLOW = "\u001b[43m";
         final String RESET = "\u001b[0m";
 
-
         System.out.println("WORDLE!");
 
-        String [] words = {"FOYER", "LOUSE", "GLOAT", "CODON", "FINCH", "PLANE", "VOILA", "SWEAT", "TASTY", "MOUSE", "PIXIE", "ANTIC", "LEMON", "HONEY", "QUEUE", "SKIRT", "HELLO", "WORLD", "EXCEL", "BROWN", "CACHE", "WATER"};
+        int attempts = 0;
+        boolean winner = false;
 
-        int index = (int)(Math.random()* words.length);
-        String correct = words[index];
+        //6 guesses per player
+        while(attempts < number_players.size()*6 && !winner) {
+            for(Player player: number_players) {
+                try {
+                    Socket socket = player.getSocket();
+                    PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+                    BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                    String guess;
+                    do {
+                        out.println("Make your guess: ");
+                        guess = in.readLine().toUpperCase();
+                        if (guess.length() != 5) { out.println("Please write a 5 letter word!");}
 
-        Scanner reader = new Scanner(System.in);
-        String guess;
-        int attemps = 0;
-        int player_number=1;
-        //6 guesses
-        while(attemps < number_players*6) {
-            boolean flag = false;
-            player_number=1;
-            while(player_number <= number_players){
-                System.out.print("Player " + player_number + " make your guess: ");
-                guess = reader.nextLine().toUpperCase();
+                    } while (guess.length() != 5);
+                    attempts++;
 
-                if (guess.length() != 5) {
-                    System.out.println("Please write a 5 letter word!");
-                    continue;
-                } else {
-                    attemps++;
-                    player_number++;
-                }
+                    StringBuilder result = new StringBuilder();
 
-                for (int j = 0; j < 5; j++) {
-                    //letter matches
-                    if (guess.substring(j, j + 1).equals(correct.substring(j, j + 1))) {
-                        System.out.print(BG_GREEN + guess.charAt(j) + RESET);
+                    for (int j = 0; j < 5; j++) {
+                        //letter matches
+                        if (guess.charAt(j) == word.charAt(j)) {
+                            result.append(BG_GREEN).append(guess.charAt(j)).append(RESET);
+                        }
+                        //letter on the wrong place
+                        else if (word.contains(Character.toString(guess.charAt(j)))) {
+                            result.append(BG_YELLOW).append(guess.charAt(j)).append(RESET);
+                        }
+                        //letter doesn't exist
+                        else {
+                            result.append(guess.charAt(j));
+                        }
                     }
-                    //leter on the wrong place
-                    else if (correct.contains(guess.substring(j, j + 1))) {
-                        System.out.print(BG_YELLOW + guess.charAt(j) + RESET);
+                    out.println(result);
+                    if (guess.equals(word)) {
+                        player.incrementScore();
+                        out.println("YOU WON!");
+                        winner = true;
+                        break;
                     }
-                    //letter doesn't exist
-                    else {
-                        System.out.print(guess.charAt(j));
-                    }
+
                 }
-                System.out.println("");
-                if (guess.equals(correct)) {
-                    player_number--;
-                    System.out.println("PLAYER " + player_number + " WON!");
-                    flag=true;
-                    break;
+                catch (IOException e) {
+                    e.printStackTrace();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
                 }
-            }
-            if(flag==true){
-                break;
             }
         }
+        for (Player player: number_players){
+            try{
+                Socket socket = player.getSocket();
+                PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+                out.println("Game over. Your score: " + player.getScore());
+                socket.close();
+            }
+            catch(IOException e){
+                e.printStackTrace();
+            }
+        }
+    return number_players;
     }
 }
+
+
+
 

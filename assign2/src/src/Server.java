@@ -1,159 +1,321 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
+import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.channels.ServerSocketChannel;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Objects;
-import java.util.Random;
-import java.util.Scanner;
+import java.util.*;
 import java.nio.file.Files;
 
+import static java.lang.Integer.parseInt;
+
 public class Server {
+
+    private final int port;
     private ServerSocket serverSocket;
-    private Scanner console;
-    private String code;
-    private String lobbySize;
-    private Player playerOne;
-    private Player playerTwo;
-    private Player playerThree;
-    private Random random;
-    public Scanner scanner;
-    private int i;
-    public HashMap<Integer, String> words;
+    private final Scanner console;
+    private final Random random;
+    public static ArrayList<String> words;
+
+    private List<Player> players;
+
+    private final HashMap<User,Player> user_player_map;
+    final List<User> users;
+    private final List<User> authenticatedUsers;
     final String BG_GREEN = "\u001b[42m";
     final String BG_YELLOW = "\u001b[43m";
     final String RESET = "\u001b[0m";
 
-    public Server() throws Exception {
+    public Server(int port) throws Exception {
+        this.port = port;
         console = new Scanner(System.in);
-        serverSocket = new ServerSocket(6666);
         random = new Random();
-        i = 0;
+        users = new ArrayList<>();
+        players = new ArrayList<>();
+        authenticatedUsers = new ArrayList<>();
+        user_player_map = new HashMap<>();
+
+        listWords("../resources/words.txt");
+        getUsersFromFile("../resources/users.txt");
+        start();
+    }
+    public void start() throws Exception {
+        this.serverSocket = ServerSocketChannel.open().socket();
+        serverSocket.bind(new InetSocketAddress(this.port));
+        System.out.println("Server is on port " + this.port);
+
 
         // Infinite loop to start a new game after one ends
         while (true) {
+
+            updateScores();
+
             System.out.println(BG_GREEN + "Creating New Lobby" + RESET);
 
-            // Getting lobby code from user
-            System.out.println("\"Enter\" for Lobby Code or \"q\" to close server");
-            code = console.nextLine();
+            // Getting lobby size from user
+            System.out.println("\"Enter\" for Lobby Size (2 or 3) or \"q\" to close server");
+            String lobbySizeInput = console.nextLine();
 
             // Checking if code is a quit event
-            if (code.equals("q")) {
+            if (lobbySizeInput.equals("q")) {
                 break;
             }
 
-            // Getting lobby size from user (either 1 or 2)
-            System.out.println("Enter Lobby Size");
-            lobbySize = console.nextLine();
+            Scanner scanner = new Scanner(System.in);
+            System.out.println("Enter Lobby Size: ");
+            String lobbySize = scanner.nextLine();
 
-            if (lobbySize.equals("2")) {
-                System.out.println("Lobby Size: 2");
-
-                // Getting first player
-                playerOne = getPlayer();
-                System.out.println(playerOne.getName() + " Joined");
-
-                // Getting second player
-                playerTwo = getPlayer();
-                System.out.println(playerTwo.getName() + " Joined");
-
-                // Create and start a game with two players
-                startGame(2);
-
-            } else if (lobbySize.equals("3")) {
-                System.out.println("Lobby Size: 3");
-
-                // Getting first player
-                playerOne = getPlayer();
-                System.out.println(playerOne.getName() + " Joined");
-
-                // Getting second player
-                playerTwo = getPlayer();
-                System.out.println(playerTwo.getName() + " Joined");
-
-                // Getting third player
-                playerThree = getPlayer();
-                System.out.println(playerThree.getName() + " Joined");
-
-                // Create and start a game with three players
-                startGame(3);
-
-            } else {
-                System.out.println(BG_YELLOW + "Invalid Lobby Size" + RESET);
+            try{
+                if(parseInt(lobbySize) < 2 || parseInt(lobbySize) > 3){
+                    System.out.println(BG_YELLOW + "Invalid Lobby Size" + RESET);
+                    continue;
+                }
             }
+            catch(NumberFormatException e){
+                System.out.println(BG_YELLOW + "Invalid Input" + RESET);
+                continue;
+            }
+
+            System.out.println("Waiting for client...");
+
+            startLobby(parseInt(lobbySize));
+
         }
 
         // Closing server after receiving quit event from user
         System.out.println(BG_YELLOW + "Closing Server" + RESET);
         console.close();
         serverSocket.close();
+
     }
 
-    // Method that waits from a socket to make a connection then creates a Player using socket
-    public Player getPlayer() throws Exception {
-        Socket s;
-        BufferedReader reader;
-        PrintWriter writer;
-        String input;
+    private void startLobby(int lobbySize) throws Exception {
 
-        // Infinite loop until successful connection with a socket
-        while (true) {
-            // Waiting for a socket to connect
-            s = serverSocket.accept();
-
-            // Setting timeout for connection reads
-            s.setSoTimeout(2000);
-            System.out.println("Accepted socket");
-            reader = new BufferedReader(new InputStreamReader(s.getInputStream()));
-            writer = new PrintWriter(s.getOutputStream(), true);
-
-            try {
-                // Waiting 2 seconds for socket to send lobby code
-                input = reader.readLine();
-
-                // Making sure lobby code is correct
-                if (code.equals(input)) {
-                    writer.println(lobbySize);
-                    return new Player(s);
-
-                    // If lobby code is incorrect, closing connection and telling socket they sent incorrect code
-                } else {
-                    writer.println("F");
-                    s.close();
-                }
-
-                // Catching exception if didn't send lobby code within timeout time or if socket closed its connection
-            } catch (Exception e) {
-                writer.println("F");
-                s.close();
-                reader.close();
-                writer.close();
+        for(int i = 1; i <= lobbySize; i++){
+            Player player = authenticateUser();
+            if(player != null){
+                players.add(player);
+                System.out.println(player.getName() + " Joined");
+            }
+            else{
+                System.out.println(BG_YELLOW + "Failed to authenticate user " + i + RESET);
+                return;
             }
         }
+         startGame(players);
     }
 
-    // Method to get random word
+    // Method to get a random word out of the listWords
     public String getWord() {
-        return words.get(random.nextInt(i)).toUpperCase();
+        return words.get(0);
+        //return words.get(random.nextInt(words.size())).toUpperCase();
     }
 
-    public void startGame(int numPlayers) {
-        // Creating a new instance of Game
-        Game game = new Game();
+    // Starting the game with the given number of players
+    public void startGame(List<Player> numPlayers) {
 
-        // Starting the game with the given number of players
-        game.wordle(numPlayers);
+        players = Game.wordle(numPlayers, getWord());
     }
 
-    public void getWords(String s) {
+
+    //lists the words that are on the words.txt in an Array List
+    public static void listWords(String s) {
         try {
-            words = (HashMap<Integer, String>) Files.readAllLines(Paths.get(s));
+            words = new ArrayList<>(Files.readAllLines(Paths.get(s)));
+            System.out.println("Words loaded successfully");
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    // if user exists and password is correct, return true
+    // otherwise call registerUser and add it to users
+
+    public boolean validateUser(String username, String password) {
+        for (User user : users) {
+            if (user.getUsername().equals(username)) {
+                if (user.validatePassword(password)) {
+                    if (!authenticatedUsers.contains(user)) {
+                        authenticatedUsers.add(user);
+                    }
+                    return true;
+                }
+                else {
+                    System.out.println("Incorrect password");
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
+
+    //registers a new user
+    public void registerUser(Socket socket) throws IOException {
+        //PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+        BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+
+
+        writer.println("User Registration");
+        writer.println("Enter username: ");
+
+        //input username
+        String username = in.readLine();
+
+        while (true) {
+            boolean unique = true;
+            for (User user : users) {
+                if (user.getUsername().equals(username)) {
+                    unique = false;
+                    break;
+                }
+            }
+            if (unique) {
+                break;
+            } else {
+               writer.println("Username already exists. Please enter a new username:");
+               username = in.readLine();
+            }
+        }
+
+        writer.println("Enter password: ");
+        //input password
+        String password = in.readLine();
+        //check if password has length between 4 and 16
+        while (password.length() < 4 || password.length() > 16) {
+            writer.println("Password must be between 4 and 16 characters. Please enter a new password:");
+            password = in.readLine();
+        }
+        User user = new User(username, password, 0);
+        authenticatedUsers.add(user);
+        users.add(user);
+        //write user to file
+        try {
+            BufferedWriter write = new BufferedWriter(new FileWriter("../resources/users.txt", true));
+            write.write("\n"+ username + "," + password + ",0");
+
+            //("\n"+ username + "," + password + ",0");
+            writer.println("User registered and authenticated successfully!");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void getUsersFromFile(String path) {
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader(path));
+            String line = reader.readLine();
+
+            while (line != null) {
+                String[] parts = line.split(",");
+                users.add(new User(parts[0], parts[1], Integer.parseInt(parts[2])));
+                line = reader.readLine();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public Player authenticateUser() throws IOException {
+        Socket socket = serverSocket.accept();
+        BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+
+        // This is now waiting for input from the client
+        writer.println("Enter username: ");
+        String username = in.readLine();
+        if(checkUserExists(username)){
+            writer.println("Enter password: ");
+            String password = in.readLine();
+            /*
+            if(validateUser(username, password)){
+                writer.println("User authenticated successfully!");
+                return new Player(socket,username);
+            }
+            else{
+                writer.println("Incorrect password. Authentication failed.");
+                socket.close();
+                return null;
+            }*/
+            int tries = 1;
+            while(!validateUser(username, password) && tries < 3){
+                writer.println("Incorrect password. Please try again. (Attempts left: " + (3-tries) +   ")");
+                writer.println("Enter password: ");
+                tries++;
+                password = in.readLine();
+            }
+            if(tries == 3){
+                writer.println("Authentication failed!");
+                socket.close();
+                return null;
+            }
+            else{
+                for (User user : users) {
+                    if (user.getUsername().equals(username)) {
+                        writer.println("User authenticated successfully!");
+                        Player player = new Player(socket, username, user.getScore());
+                        user_player_map.put(user, player);
+                        return player;
+                    }
+                }
+            }
+        }
+        else{
+            writer.println("User does not exist. Would you like to register? (y/n)");
+            String response = in.readLine();
+            if(response.equalsIgnoreCase("y")){
+                registerUser(socket);
+                Player player = new Player(socket, username, 0);
+                user_player_map.put(users.getLast(), player);
+                return player;
+            }
+            else{
+                writer.println("Authentication failed!");
+                socket.close();
+                return null;
+            }
+        }
+        return null;
+    }
+
+    public boolean checkUserExists(String username) {
+        for (User user : users) {
+            if (user.getUsername().equals(username)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    public void updateScores() {
+        //iterate through the hashmap and update the scores of the users
+        for (User user : users) {
+            if (user_player_map.containsKey(user)) {
+                Player player = user_player_map.get(user);
+                //print the score of the player
+                System.out.println(player.getName() + " has a score of " + player.getScore());
+                user.setScore(player.getScore());
+            }
+        }
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter("../resources/users.txt"))) {
+            for (User user : users) {
+                writer.write(user.getUsername() + "," + user.getPassword() + "," + user.getScore());
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        Server server = null;
+        try {
+            server = new Server(6666);
+            //listWords("assign2/resources/words.txt");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        server.start();
     }
 }
