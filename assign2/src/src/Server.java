@@ -89,7 +89,6 @@ public class Server {
             Player player = authenticateUser();
             if(player != null){
                 players.add(player);
-                player = getPlayer();
                 System.out.println(player.getName() + " Joined");
             }
             else{
@@ -98,47 +97,6 @@ public class Server {
             }
         }
         startGame(players);
-    }
-
-    // Method that waits from a socket to make a connection then creates a Player using socket
-    public Player getPlayer() throws Exception {
-
-        // Infinite loop until successful connection with a socket
-        while (true) {
-            // Waiting for a socket to connect
-            Socket socket = serverSocket.accept();
-
-            // Setting timeout for connection reads
-            socket.setSoTimeout(2000);
-            System.out.println("Client connected: " + socket.getInetAddress());
-
-
-            //BufferedReader reader = new BufferedReader(new InputStreamReader(s.getInputStream()));
-            //PrintWriter writer = new PrintWriter(s.getOutputStream(), true);
-
-            /*try {
-                // Waiting 2 seconds for socket to send lobby code
-                input = reader.readLine();
-
-                // Making sure lobby code is correct
-                if (code.equals(input)) {
-                    writer.println(lobbySize);
-                    return new Player(s);
-
-                    // If lobby code is incorrect, closing connection and telling socket they sent incorrect code
-                } else {
-                    writer.println("F");
-                    s.close();
-                }
-
-                // Catching exception if didn't send lobby code within timeout time or if socket closed its connection
-            } catch (Exception e) {
-                writer.println("F");
-                s.close();
-                reader.close();
-                writer.close();
-            }*/
-        }
     }
 
     // Method to get a random word out of the listWords
@@ -180,7 +138,7 @@ public class Server {
                 }
             }
         }
-        return true; //fixed it
+        return false; //fixed it
     }
 
     /*public boolean validateUser(String username, String password) {
@@ -206,7 +164,7 @@ public class Server {
         Scanner scanner = new Scanner(System.in);
 
         writer.println("User Registration");
-        writer.println(" ");
+    //    writer.println(" ");
         writer.println("Username:");
 
         //input username
@@ -309,7 +267,7 @@ public class Server {
                 return true;
             }
         }
-        return true;
+        return false;
     }
 
     public static void main(String[] args) throws Exception {

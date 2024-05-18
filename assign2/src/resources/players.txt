@@ -1,5 +1,0 @@
-Utilizador: john_doe123, Palavra-passe: password123, Rank: 0
-Utilizador: jenny_smith456, Palavra-passe: securepassword, Rank: 0
-Utilizador: mike_jones789, Palavra-passe: mypass123, Rank: 0
-Utilizador: emily_wong101, Palavra-passe: hello_world, Rank: 0
-Utilizador: david_brown222, Palavra-passe: brownie456, Rank: 0
