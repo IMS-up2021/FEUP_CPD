@@ -30,8 +30,8 @@ public class Server {
         users = new ArrayList<>();
         authenticatedUsers = new ArrayList<>();
 
-        listWords("resources/words.txt");
-        getUsersFromFile("resources/users.txt");
+        listWords("../resources/words.txt");
+        getUsersFromFile("../resources/users.txt");
         start();
     }
     public void start() throws Exception {
