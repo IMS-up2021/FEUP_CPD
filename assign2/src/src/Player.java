@@ -10,10 +10,10 @@ public class Player {
     private String name;
     private int score;
 
-    public Player(Socket socket, String name) {
+    public Player(Socket socket, String name, Integer score) {
         this.socket = socket;
         this.name = name;
-        this.score = 0;
+        this.score = score;
     }
 
     public Socket getSocket(){return socket;}
@@ -22,6 +22,7 @@ public class Player {
     }
     public int getScore(){return score;}
     public void incrementScore(){this.score++;}
+
 
     public static void main(String[] args) {
         try{
@@ -43,6 +44,15 @@ public class Player {
                     String guess = console.readLine();
                     output.println(guess);
                 }
+                else if(response.contains("User does not exist. Would you like to register? (y/n)")){
+                    String guess = console.readLine();
+                    output.println(guess);
+                }
+                else if (response.contains("Password must be between 4 and 16 characters. Please enter a new password:")) {
+                    String password = console.readLine();
+                    output.println(password);
+                }
+
             }
             socket.close();
         }

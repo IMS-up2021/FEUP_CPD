@@ -3,36 +3,7 @@ import java.net.Socket;
 import java.util.List;
 import java.util.Scanner;
 public class Game{
-    /*private static final String database = "players.txt";
-    public static int rank = 0;
-
-    public static void updateRanking(String playerName, int newRanking) {
-        try {
-            BufferedReader reader = new BufferedReader(new FileReader(database));
-            String line;
-            StringBuilder content = new StringBuilder();
-
-            while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(", ");
-                String username = parts[0].split(": ")[1];
-                if (username.equals(playerName)) {
-                    parts[2] = "Rank: " + newRanking;
-                    line = String.join(", ", parts);
-                }
-                content.append(line).append("\n");
-            }
-            reader.close();
-
-            BufferedWriter writer = new BufferedWriter(new FileWriter(database));
-            writer.write(content.toString());
-            writer.close();
-
-            System.out.println("Ranking updated");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }*/
-    public static void wordle(List<Player> number_players, String word)  {
+    public static List<Player> wordle(List<Player> number_players, String word)  {
 
         final String BG_GREEN = "\u001b[42m";
         final String BG_YELLOW = "\u001b[43m";
@@ -86,6 +57,8 @@ public class Game{
                 }
                 catch (IOException e) {
                     e.printStackTrace();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
                 }
             }
         }
@@ -100,6 +73,7 @@ public class Game{
                 e.printStackTrace();
             }
         }
+    return number_players;
     }
 }
 

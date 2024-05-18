@@ -17,7 +17,11 @@ public class Server {
     private final Scanner console;
     private final Random random;
     public static ArrayList<String> words;
-    private final List<User> users;
+
+    private List<Player> players;
+
+    private final HashMap<User,Player> user_player_map;
+    final List<User> users;
     private final List<User> authenticatedUsers;
     final String BG_GREEN = "\u001b[42m";
     final String BG_YELLOW = "\u001b[43m";
@@ -28,7 +32,9 @@ public class Server {
         console = new Scanner(System.in);
         random = new Random();
         users = new ArrayList<>();
+        players = new ArrayList<>();
         authenticatedUsers = new ArrayList<>();
+        user_player_map = new HashMap<>();
 
         listWords("../resources/words.txt");
         getUsersFromFile("../resources/users.txt");
@@ -42,6 +48,8 @@ public class Server {
 
         // Infinite loop to start a new game after one ends
         while (true) {
+
+            updateScores();
 
             System.out.println(BG_GREEN + "Creating New Lobby" + RESET);
 
@@ -83,7 +91,6 @@ public class Server {
     }
 
     private void startLobby(int lobbySize) throws Exception {
-        List<Player> players = new ArrayList<>();
 
         for(int i = 1; i <= lobbySize; i++){
             Player player = authenticateUser();
@@ -96,17 +103,19 @@ public class Server {
                 return;
             }
         }
-        startGame(players);
+         startGame(players);
     }
 
     // Method to get a random word out of the listWords
     public String getWord() {
-        return words.get(random.nextInt(words.size())).toUpperCase();
+        return words.get(0);
+        //return words.get(random.nextInt(words.size())).toUpperCase();
     }
 
     // Starting the game with the given number of players
     public void startGame(List<Player> numPlayers) {
-        Game.wordle(numPlayers, getWord());
+
+        players = Game.wordle(numPlayers, getWord());
     }
 
 
@@ -138,37 +147,21 @@ public class Server {
                 }
             }
         }
-        return false; //fixed it
-    }
-
-    /*public boolean validateUser(String username, String password) {
-        for (User user : users) {
-            if (user.getUsername().equals(username)) {
-                if (user.validatePassword(password)) {
-                    authenticatedUsers.add(user);
-                    return true;
-                }
-                else {
-                    System.out.println("Incorrect password");
-                    return false;
-                }
-            }
-        }
-
         return false;
     }
-*/
+
     //registers a new user
     public void registerUser(Socket socket) throws IOException {
+        //PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+        BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
-        Scanner scanner = new Scanner(System.in);
+
 
         writer.println("User Registration");
-    //    writer.println(" ");
-        writer.println("Username:");
+        writer.println("Enter username: ");
 
         //input username
-        String username = scanner.nextLine();
+        String username = in.readLine();
 
         while (true) {
             boolean unique = true;
@@ -182,25 +175,27 @@ public class Server {
                 break;
             } else {
                writer.println("Username already exists. Please enter a new username:");
-                username = scanner.nextLine();
+               username = in.readLine();
             }
         }
 
-        writer.println("Enter Password: ");
+        writer.println("Enter password: ");
         //input password
-        String password = scanner.nextLine();
+        String password = in.readLine();
         //check if password has length between 4 and 16
         while (password.length() < 4 || password.length() > 16) {
             writer.println("Password must be between 4 and 16 characters. Please enter a new password:");
-            password = scanner.nextLine();
+            password = in.readLine();
         }
-        User user = new User(username, password);
+        User user = new User(username, password, 0);
         authenticatedUsers.add(user);
         users.add(user);
         //write user to file
         try {
-            FileWriter fileWriter = new FileWriter("assign2/resources/users.txt", true);
-            fileWriter.write("\n"+ username + "," + password);
+            BufferedWriter write = new BufferedWriter(new FileWriter("../resources/users.txt", true));
+            write.write("\n"+ username + "," + password + ",0");
+
+            //("\n"+ username + "," + password + ",0");
             writer.println("User registered and authenticated successfully!");
         } catch (IOException e) {
             e.printStackTrace();
@@ -209,13 +204,12 @@ public class Server {
 
     public void getUsersFromFile(String path) {
         try {
-            //ArrayList<String> lines = (ArrayList<String>) Files.readAllLines(Paths.get(path));
             BufferedReader reader = new BufferedReader(new FileReader(path));
             String line = reader.readLine();
 
             while (line != null) {
                 String[] parts = line.split(",");
-                users.add(new User(parts[0], parts[1]));
+                users.add(new User(parts[0], parts[1], Integer.parseInt(parts[2])));
                 line = reader.readLine();
             }
         } catch (IOException e) {
@@ -234,6 +228,7 @@ public class Server {
         if(checkUserExists(username)){
             writer.println("Enter password: ");
             String password = in.readLine();
+            /*
             if(validateUser(username, password)){
                 writer.println("User authenticated successfully!");
                 return new Player(socket,username);
@@ -242,6 +237,28 @@ public class Server {
                 writer.println("Incorrect password. Authentication failed.");
                 socket.close();
                 return null;
+            }*/
+            int tries = 1;
+            while(!validateUser(username, password) && tries < 3){
+                writer.println("Incorrect password. Please try again. (Attempts left: " + (3-tries) +   ")");
+                writer.println("Enter password: ");
+                tries++;
+                password = in.readLine();
+            }
+            if(tries == 3){
+                writer.println("Authentication failed!");
+                socket.close();
+                return null;
+            }
+            else{
+                for (User user : users) {
+                    if (user.getUsername().equals(username)) {
+                        writer.println("User authenticated successfully!");
+                        Player player = new Player(socket, username, user.getScore());
+                        user_player_map.put(user, player);
+                        return player;
+                    }
+                }
             }
         }
         else{
@@ -249,7 +266,9 @@ public class Server {
             String response = in.readLine();
             if(response.equalsIgnoreCase("y")){
                 registerUser(socket);
-                return new Player(socket, username);
+                Player player = new Player(socket, username, 0);
+                user_player_map.put(users.getLast(), player);
+                return player;
             }
             else{
                 writer.println("Authentication failed!");
@@ -257,17 +276,36 @@ public class Server {
                 return null;
             }
         }
+        return null;
     }
 
     public boolean checkUserExists(String username) {
-        //users.clear();
-        //getUsersFromFile(path);
         for (User user : users) {
             if (user.getUsername().equals(username)) {
                 return true;
             }
         }
         return false;
+    }
+    public void updateScores() {
+        //iterate through the hashmap and update the scores of the users
+        for (User user : users) {
+            if (user_player_map.containsKey(user)) {
+                Player player = user_player_map.get(user);
+                //print the score of the player
+                System.out.println(player.getName() + " has a score of " + player.getScore());
+                user.setScore(player.getScore());
+            }
+        }
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter("../resources/users.txt"))) {
+            for (User user : users) {
+                writer.write(user.getUsername() + "," + user.getPassword() + "," + user.getScore());
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public static void main(String[] args) throws Exception {
