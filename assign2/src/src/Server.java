@@ -27,6 +27,8 @@ public class Server {
     final String BG_YELLOW = "\u001b[43m";
     final String RESET = "\u001b[0m";
 
+    private int playMode; // 1 for simple, 2 for ranked
+
     public Server(int port) throws Exception {
         this.port = port;
         console = new Scanner(System.in);
@@ -53,7 +55,7 @@ public class Server {
 
             System.out.println(BG_GREEN + "Creating New Lobby" + RESET);
 
-            // Getting lobby size from user
+            // Getting lobby size from server manager
             System.out.println("\"Enter\" for Lobby Size (2 or 3) or \"q\" to close server");
             String lobbySizeInput = console.nextLine();
 
@@ -77,6 +79,8 @@ public class Server {
                 continue;
             }
 
+            setPlayMode();
+
             System.out.println("Waiting for client...");
 
             startLobby(parseInt(lobbySize));
@@ -90,6 +94,29 @@ public class Server {
 
     }
 
+    public void setPlayMode() {
+        while (true){
+            System.out.println("Choose a playing mode:");
+            System.out.println("1. Simple");
+            System.out.println("2. Ranked");
+
+            String input = console.nextLine();
+
+            switch (input) {
+                case "1":
+                    playMode = 1;
+                    System.out.println("Playing mode set to Simple.");
+
+                    return;
+                case "2":
+                    playMode = 2;
+                    System.out.println("Playing mode set to Ranked.");
+                    return;
+                default:
+                    System.out.println("Invalid input. Please enter a number between 1 and 2.");
+            }
+        }
+    }
     private void startLobby(int lobbySize) throws Exception {
 
         for(int i = 1; i <= lobbySize; i++){
@@ -103,7 +130,37 @@ public class Server {
                 return;
             }
         }
-         startGame(players);
+
+        if (playMode == 2) {
+            // Sort players by score
+            players.sort(Comparator.comparingInt(Player::getLevel).reversed());
+            matchPlayers(players, lobbySize);
+        }
+        else {
+            startGame(players);
+        }
+    }
+
+    private void matchPlayers(List<Player> players, int lobbySize) {
+        if (lobbySize == 2) {
+            Player player1 = players.get(0);
+            Player player2 = players.get(1);
+            List<Player> matchedPlayers = new ArrayList<>();
+            matchedPlayers.add(player1);
+            matchedPlayers.add(player2);
+            startGame(matchedPlayers);
+        }
+        else {
+
+            //group players in list of lobby size
+            List<List<Player>> matchedPlayers = new ArrayList<>();
+            for (int i = 0; i < players.size(); i += lobbySize) {
+                matchedPlayers.add(players.subList(i, Math.min(i + lobbySize, players.size())));
+            }
+            for (List<Player> matchedPlayer : matchedPlayers) {
+                startGame(matchedPlayer);
+            }
+        }
     }
 
     // Method to get a random word out of the listWords

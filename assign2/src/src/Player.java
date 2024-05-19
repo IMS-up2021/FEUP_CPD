@@ -9,11 +9,14 @@ public class Player {
     private Socket socket;
     private String name;
     private int score;
+    private int level;
 
     public Player(Socket socket, String name, Integer score) {
         this.socket = socket;
         this.name = name;
         this.score = score;
+
+        setLevel(score);
     }
 
     public Socket getSocket(){return socket;}
@@ -21,8 +24,18 @@ public class Player {
         return name;
     }
     public int getScore(){return score;}
-    public void incrementScore(){this.score++;}
+    public void incrementScore(){
+        this.score++;
+        setLevel(this.score);
+    }
 
+    private void setLevel(Integer score){
+        this.level = 1 + (score/10);
+    }
+
+    public int getLevel(){
+        return level;
+    }
 
     public static void main(String[] args) {
         try{

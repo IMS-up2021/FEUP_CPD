@@ -3,6 +3,11 @@ import java.net.Socket;
 import java.util.List;
 import java.util.Scanner;
 public class Game{
+
+    static final int gameID;
+
+
+
     public static List<Player> wordle(List<Player> number_players, String word)  {
 
         final String BG_GREEN = "\u001b[42m";
