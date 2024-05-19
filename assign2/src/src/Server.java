@@ -1,33 +1,41 @@
 import java.io.*;
+import java.math.BigInteger;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.file.Paths;
+import java.security.SecureRandom;
 import java.util.*;
 import java.nio.file.Files;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static java.lang.Integer.parseInt;
 
 public class Server {
 
     private final int port;
+    private final long TIMEOUT = 10000;
     private ServerSocket serverSocket;
     private final Scanner console;
     private final Random random;
     public static ArrayList<String> words;
-
     private List<Player> players;
-
     private final HashMap<User,Player> user_player_map;
+    private final HashMap<String,Player> token_player_map; //matches tokens to players
+    private final HashMap<String,String> user_token_map; //matches tokens to users who have a place in the queue
+    private Queue<String> queue; //queue of tokens waiting to play
     final List<User> users;
     private final List<User> authenticatedUsers;
     final String BG_GREEN = "\u001b[42m";
     final String BG_YELLOW = "\u001b[43m";
     final String RESET = "\u001b[0m";
-
     private int playMode; // 1 for simple, 2 for ranked
+
+    // Create a lock
+    private final ReentrantLock lock = new ReentrantLock();
 
     public Server(int port) throws Exception {
         this.port = port;
@@ -37,10 +45,27 @@ public class Server {
         players = new ArrayList<>();
         authenticatedUsers = new ArrayList<>();
         user_player_map = new HashMap<>();
+        queue = new LinkedList<>();
+        token_player_map = new HashMap<>();
+        user_token_map = new HashMap<>();
 
         listWords("../resources/words.txt");
         getUsersFromFile("../resources/users.txt");
+
         start();
+    }
+
+    public class Lobby implements Runnable {
+        private List<Player> players;
+
+        public Lobby(List<Player> players) {
+            this.players = players;
+        }
+
+        @Override
+        public void run() {
+            startGame(players);
+        }
     }
     public void start() throws Exception {
         this.serverSocket = ServerSocketChannel.open().socket();
@@ -52,6 +77,8 @@ public class Server {
         while (true) {
 
             updateScores();
+
+            setPlayMode();
 
             System.out.println(BG_GREEN + "Creating New Lobby" + RESET);
 
@@ -79,11 +106,12 @@ public class Server {
                 continue;
             }
 
-            setPlayMode();
+
 
             System.out.println("Waiting for client...");
 
-            startLobby(parseInt(lobbySize));
+            int maxClients = 10;
+            startLobby(parseInt(lobbySize), maxClients);
 
         }
 
@@ -100,6 +128,8 @@ public class Server {
             System.out.println("1. Simple");
             System.out.println("2. Ranked");
 
+            System.out.println(" ");
+            System.out.print("Choice: ");
             String input = console.nextLine();
 
             switch (input) {
@@ -117,37 +147,88 @@ public class Server {
             }
         }
     }
-    private void startLobby(int lobbySize) throws Exception {
+    private void startLobby(int lobbySize, int maxClients) throws Exception {
 
-        for(int i = 1; i <= lobbySize; i++){
-            Player player = authenticateUser();
-            if(player != null){
-                players.add(player);
+        //TODO: Add timeout for waiting for players to join
+
+        List<Player> tempPlayers = new ArrayList<>();
+
+        for (int i = 1; i <= 2; i++) {
+            //start wait timer
+            Player player = authenticateUser(); 
+            if (player != null) {
+                //players.add(player);
+                lock.lock();
+                try {
+                    players.add(player);
+                }
+                finally {
+                    lock.unlock();
+                }
                 System.out.println(player.getName() + " Joined");
-            }
-            else{
+            } else {
                 System.out.println(BG_YELLOW + "Failed to authenticate user " + i + RESET);
                 return;
             }
         }
+        /*
+        lock.lock();
+        try {
+            players.addAll(tempPlayers);
+        }
+        finally {
+            lock.unlock();
+        }*/
 
         if (playMode == 2) {
             // Sort players by score
-            players.sort(Comparator.comparingInt(Player::getLevel).reversed());
-            matchPlayers(players, lobbySize);
+            lock.lock();
+            try{
+                players.sort(Comparator.comparingInt(Player::getLevel).reversed());
+            }
+            finally {
+                lock.unlock();
+            }
+
+            //matchPlayers(players, lobbySize);
         }
-        else {
-            startGame(players);
+
+
+        //split players into groups of lobbysize and start a new thread for each group
+        if (players.size() % lobbySize == 0) { //all players are assigned a lobby
+            for (int i = 0; i < players.size(); i += lobbySize) {
+                List<Player> matchedPlayers = players.subList(i, i + lobbySize);
+                new Thread(new Lobby(matchedPlayers)).start();
+            }
+        } else if (players.size() % lobbySize == 1) { //one player is left out
+            for (int i = 0; i < players.size() - 1; i += lobbySize) {
+                List<Player> matchedPlayers = players.subList(i, i + lobbySize);
+                new Thread(new Lobby(matchedPlayers)).start();
+            }
+        } else {
+            for (int i = 0; i < players.size() - 2; i += lobbySize) { //two players are left out
+                List<Player> matchedPlayers = players.subList(i, i + lobbySize);
+                new Thread(new Lobby(matchedPlayers)).start();
+            }
         }
     }
 
+
     private void matchPlayers(List<Player> players, int lobbySize) {
+
         if (lobbySize == 2) {
+
             Player player1 = players.get(0);
             Player player2 = players.get(1);
             List<Player> matchedPlayers = new ArrayList<>();
-            matchedPlayers.add(player1);
-            matchedPlayers.add(player2);
+            lock.lock();
+            try {
+                matchedPlayers.add(player1);
+                matchedPlayers.add(player2);
+            }
+            finally {
+                lock.unlock();
+            }
             startGame(matchedPlayers);
         }
         else {
@@ -155,7 +236,13 @@ public class Server {
             //group players in list of lobby size
             List<List<Player>> matchedPlayers = new ArrayList<>();
             for (int i = 0; i < players.size(); i += lobbySize) {
-                matchedPlayers.add(players.subList(i, Math.min(i + lobbySize, players.size())));
+                lock.lock();
+                try{
+                    matchedPlayers.add(players.subList(i, Math.min(i + lobbySize, players.size())));
+                }
+                finally {
+                    lock.unlock();
+                }
             }
             for (List<Player> matchedPlayer : matchedPlayers) {
                 startGame(matchedPlayer);
@@ -166,7 +253,6 @@ public class Server {
     // Method to get a random word out of the listWords
     public String getWord() {
         return words.get(0);
-        //return words.get(random.nextInt(words.size())).toUpperCase();
     }
 
     // Starting the game with the given number of players
@@ -186,15 +272,21 @@ public class Server {
         }
     }
 
-    // if user exists and password is correct, return true
-    // otherwise call registerUser and add it to users
+    //if user exists and password is correct, return true
 
     public boolean validateUser(String username, String password) {
         for (User user : users) {
             if (user.getUsername().equals(username)) {
                 if (user.validatePassword(password)) {
                     if (!authenticatedUsers.contains(user)) {
-                        authenticatedUsers.add(user);
+                        lock.lock();
+                        try{
+                            authenticatedUsers.add(user);
+                        }
+                        finally {
+                            lock.unlock();
+                        }
+
                     }
                     return true;
                 }
@@ -208,18 +300,15 @@ public class Server {
     }
 
     //registers a new user
-    public void registerUser(Socket socket) throws IOException {
-        //PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+    public Player registerUser(Socket socket) throws IOException {
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
-
 
         writer.println("User Registration");
         writer.println("Enter username: ");
 
         //input username
         String username = in.readLine();
-
         while (true) {
             boolean unique = true;
             for (User user : users) {
@@ -245,18 +334,27 @@ public class Server {
             password = in.readLine();
         }
         User user = new User(username, password, 0);
-        authenticatedUsers.add(user);
-        users.add(user);
-        //write user to file
+        Player player = new Player(socket, username, 0);
+        lock.lock();
+        try {
+            authenticatedUsers.add(user);
+            users.add(user);
+        }
+        finally {
+            lock.unlock();
+        }
+        enterQueueFirstTime(player);
+        //add user to database file
         try {
             BufferedWriter write = new BufferedWriter(new FileWriter("../resources/users.txt", true));
             write.write("\n"+ username + "," + password + ",0");
 
-            //("\n"+ username + "," + password + ",0");
             writer.println("User registered and authenticated successfully!");
+            writer.println("The game will start shortly. We are matching you with other players.");
         } catch (IOException e) {
             e.printStackTrace();
         }
+        return player;
     }
 
     public void getUsersFromFile(String path) {
@@ -266,7 +364,13 @@ public class Server {
 
             while (line != null) {
                 String[] parts = line.split(",");
-                users.add(new User(parts[0], parts[1], Integer.parseInt(parts[2])));
+                lock.lock();
+                try {
+                    users.add(new User(parts[0], parts[1], parseInt(parts[2])));
+                }
+                finally {
+                    lock.unlock();
+                }
                 line = reader.readLine();
             }
         } catch (IOException e) {
@@ -276,43 +380,60 @@ public class Server {
 
     public Player authenticateUser() throws IOException {
         Socket socket = serverSocket.accept();
+        Socket userSocket = new Socket();
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+        Player player = null;
 
         // This is now waiting for input from the client
         writer.println("Enter username: ");
         String username = in.readLine();
+
+        while (isAuthenticated(username)) { //guarantee that users are not authenticated twice
+            writer.println("User already authenticated. Please enter a different username.");
+            writer.println("Enter username: ");
+            username = in.readLine();
+
+        }
         if(checkUserExists(username)){
             writer.println("Enter password: ");
             String password = in.readLine();
-            /*
-            if(validateUser(username, password)){
-                writer.println("User authenticated successfully!");
-                return new Player(socket,username);
-            }
-            else{
-                writer.println("Incorrect password. Authentication failed.");
-                socket.close();
-                return null;
-            }*/
             int tries = 1;
-            while(!validateUser(username, password) && tries < 3){
+            while(!validateUser(username, password) && tries < 3){ //3 attempts to enter correct password
                 writer.println("Incorrect password. Please try again. (Attempts left: " + (3-tries) +   ")");
                 writer.println("Enter password: ");
                 tries++;
                 password = in.readLine();
             }
             if(tries == 3){
-                writer.println("Authentication failed!");
+                writer.println("Authentication failed! You have exceeded the number of attempts and will be disconnected.");
                 socket.close();
                 return null;
             }
-            else{
+
+            else{ //user, password correct, authenticate user
+
                 for (User user : users) {
                     if (user.getUsername().equals(username)) {
+                        if(isActive(username)) { //if the player had already connected, connect them again to the game
+                            //retrieve token and player
+                            //check if username exists in user_token_map and get the player
+                            for (String token : user_token_map.keySet()) {
+                                if (user_token_map.get(token).equals(username)) {
+                                    player = token_player_map.get(token); //token in queue and player in token_player_map
+                                }
+                            }
+                        }
+                        else{
+                            player = new Player(socket, username, user.getScore());
+                            //create a new token for the player
+                            enterQueueFirstTime(player);
+                        }
+
+                        //user_player_map.put(user, player);
+
                         writer.println("User authenticated successfully!");
-                        Player player = new Player(socket, username, user.getScore());
-                        user_player_map.put(user, player);
+                        writer.println("The game will start shortly. We are matching you with other players.");
                         return player;
                     }
                 }
@@ -322,14 +443,13 @@ public class Server {
             writer.println("User does not exist. Would you like to register? (y/n)");
             String response = in.readLine();
             if(response.equalsIgnoreCase("y")){
-                registerUser(socket);
-                Player player = new Player(socket, username, 0);
-                user_player_map.put(users.getLast(), player);
+                player = registerUser(socket);
                 return player;
             }
             else{
-                writer.println("Authentication failed!");
-                socket.close();
+                writer.println("You must be a registered user to play the game.");
+                //TODO:check if recursion works
+                authenticateUser();
                 return null;
             }
         }
@@ -344,6 +464,7 @@ public class Server {
         }
         return false;
     }
+
     public void updateScores() {
         //iterate through the hashmap and update the scores of the users
         for (User user : users) {
@@ -365,11 +486,118 @@ public class Server {
         }
     }
 
+    public synchronized void enterQueueFirstTime(Player player) throws IOException {
+        String token = new tokenGenerator().nextToken();
+        user_token_map.put(token, player.getName());
+        token_player_map.put(token, player);
+        lock.lock();
+        try{
+            queue.add(token);
+        }
+        finally {
+            lock.unlock();
+        }
+    }
+
+    /*
+    public synchronized boolean returnToQueue(Player player) {
+        //get the player from the token and add them to the queue
+        if(token_player_map.containsValue(player)) {
+            //queue.add(player);
+            return true;
+        }
+        return false;
+    }*/
+
+   //check if user is authenticated
+    public boolean isAuthenticated(String username) {
+        for (User user : authenticatedUsers) {
+            if (user.getUsername().equals(username)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //check if player object exists/is active in server
+    public boolean isActive(String username) {
+        for (Player player : players) {
+            if (player.getName().equals(username)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void disconnectPlayer(Player player) {
+        lock.lock();
+        try {
+            players.remove(player);
+        }
+        finally {
+            lock.unlock();
+        }
+        //remove instance of user/player from user_to_player hashmap
+        for (User user : user_player_map.keySet()) {
+            if (user_player_map.get(user).equals(player)) {
+                lock.lock();
+                try {
+                    user_player_map.remove(user);
+                }
+                finally {
+                    lock.unlock();
+                }
+                logoutUser(user);
+                break;
+            }
+        }
+    }
+
+    //attempt of avoiding slow clients
+    public void timeout(Socket socket) throws IOException {
+        long previousTime = System.currentTimeMillis();
+        long time;
+        Selector selector = Selector.open();
+        int readyChannels = selector.select(TIMEOUT);
+        if (readyChannels == 0) {
+            time = System.currentTimeMillis() - previousTime;
+            if(time > TIMEOUT) {
+                System.out.println("Runtime error! Disconnecting user...");
+                if (socket != null && !socket.isClosed()) {
+                    socket.close();
+                }
+            }
+        }
+        else {
+            time = System.currentTimeMillis();
+            selector.selectedKeys().clear();
+        }
+    }
+
+    //logout user, no longer authenticated
+    private void logoutUser(User user) {
+        lock.lock();
+        try {
+            authenticatedUsers.remove(user);
+        }
+        finally {
+            lock.unlock();
+        }
+    }
+
+    //---------------------------------------------------------------------
+    // Token Generator
+    public static class tokenGenerator {
+        private SecureRandom random = new SecureRandom();
+
+        public String nextToken() {
+            return new BigInteger(130, random).toString(32);
+        }
+    }
     public static void main(String[] args) throws Exception {
         Server server = null;
         try {
             server = new Server(6666);
-            //listWords("assign2/resources/words.txt");
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

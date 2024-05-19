@@ -1,12 +1,13 @@
 import java.io.*;
 import java.net.Socket;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
+
 public class Game{
+    //static final int gameID;
 
-    static final int gameID;
-
-
+    // Create a lock
+    private static final ReentrantLock lock = new ReentrantLock();
 
     public static List<Player> wordle(List<Player> number_players, String word)  {
 
@@ -14,14 +15,25 @@ public class Game{
         final String BG_YELLOW = "\u001b[43m";
         final String RESET = "\u001b[0m";
 
-        System.out.println("WORDLE!");
+        System.out.println("Game Started");
 
-        int attempts = 0;
+        Map<Player, Integer> attemptsPerPlayer = new HashMap<>();
+
+        for (Player player : number_players) {
+            attemptsPerPlayer.put(player, 0);
+        }
+
+        //int attempts = 0;
         boolean winner = false;
+        Set<Player> winningPlayers = new HashSet<>();
 
         //6 guesses per player
-        while(attempts < number_players.size()*6 && !winner) {
+        while(attemptsPerPlayer.values().stream().mapToInt(Integer::intValue).sum() < number_players.size() * 6 && !winner) {
             for(Player player: number_players) {
+                if (attemptsPerPlayer.get(player) > 6) {
+                    break;
+                }
+
                 try {
                     Socket socket = player.getSocket();
                     PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
@@ -33,7 +45,15 @@ public class Game{
                         if (guess.length() != 5) { out.println("Please write a 5 letter word!");}
 
                     } while (guess.length() != 5);
-                    attempts++;
+
+                    // Increment attempts for the player
+                    lock.lock();
+                    try {
+                        attemptsPerPlayer.put(player, attemptsPerPlayer.get(player) + 1);
+                    }
+                    finally {
+                        lock.unlock();
+                    }
 
                     StringBuilder result = new StringBuilder();
 
@@ -51,14 +71,20 @@ public class Game{
                             result.append(guess.charAt(j));
                         }
                     }
-                    out.println(result);
+                    out.println("Guess: " + result);
+                    out.println("Attempts left: " + (6 - attemptsPerPlayer.get(player)));
                     if (guess.equals(word)) {
-                        player.incrementScore();
-                        out.println("YOU WON!");
-                        winner = true;
-                        break;
-                    }
+                        lock.lock();
+                        try{
+                            winningPlayers.add(player);
+                        }
+                        finally {
+                            lock.unlock();
+                        }
 
+                        player.incrementScore();
+                        winner = true;
+                    }
                 }
                 catch (IOException e) {
                     e.printStackTrace();
@@ -67,11 +93,22 @@ public class Game{
                 }
             }
         }
+        // Determine the message to send
+        String endMessage = null;
+        if (winningPlayers.size() > 1) {
+            endMessage = "IT'S A TIE!";
+        } else if (winningPlayers.size() == 1) {
+            endMessage = "YOU WON!";
+        }
+
         for (Player player: number_players){
             try{
                 Socket socket = player.getSocket();
                 PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
                 out.println("Game over. Your score: " + player.getScore());
+                if (winningPlayers.contains(player)) {
+                    out.println(endMessage);
+                }
                 socket.close();
             }
             catch(IOException e){
