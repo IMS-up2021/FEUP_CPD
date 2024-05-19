@@ -8,7 +8,7 @@ When using the Intellij terminal for compilation, it is necessary to enter the s
 
 Example: 
 ```
-cd C:\Users\Utilizador\Desktop\Joana\Feup\3ano\2_semestre\CPD\g17\assign2\src\src
+cd C:\Users\Utilizador\Desktop\CPD\g17\assign2\src\src
 ```
 
 Then, use the command `javac *.java` to compile all the java files.
