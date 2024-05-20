@@ -10,14 +10,22 @@ import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.*;
 import java.nio.file.Files;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
+
 
 import static java.lang.Integer.parseInt;
 
 public class Server {
 
     private final int port;
-    private final long TIMEOUT = 10000;
+    private ExecutorService executorService = Executors.newCachedThreadPool(); // Thread pool for game instances
+    private AtomicInteger activeGameCount = new AtomicInteger(0); // Counter to keep track of active game instances
+    private final long TIMEOUT = 5000;
     private ServerSocket serverSocket;
     private final Scanner console;
     private final Random random;
@@ -33,6 +41,10 @@ public class Server {
     final String BG_YELLOW = "\u001b[43m";
     final String RESET = "\u001b[0m";
     private int playMode; // 1 for simple, 2 for ranked
+    private ScheduledExecutorService scheduler;
+
+
+    private int nextGameID = 1; // Counter to generate unique game IDs
 
     // Create a lock
     private final ReentrantLock lock = new ReentrantLock();
@@ -48,6 +60,7 @@ public class Server {
         queue = new LinkedList<>();
         token_player_map = new HashMap<>();
         user_token_map = new HashMap<>();
+        scheduler = Executors.newScheduledThreadPool(1);
 
         listWords("../resources/words.txt");
         getUsersFromFile("../resources/users.txt");
@@ -55,73 +68,152 @@ public class Server {
         start();
     }
 
-    public class Lobby implements Runnable {
+    class GameThread implements Runnable {
         private List<Player> players;
+        private int gameID;
 
-        public Lobby(List<Player> players) {
+        public GameThread(List<Player> players, int gameID) {
             this.players = players;
+            this.gameID = gameID;
         }
 
         @Override
         public void run() {
-            startGame(players);
+            updateScores();
+
+            startGame(players, gameID);
+            updateScores();
+
+            //if game is finished, decrement active game count
+            activeGameCount.decrementAndGet();
+
         }
-    }
+}
+
+
     public void start() throws Exception {
         this.serverSocket = ServerSocketChannel.open().socket();
         serverSocket.bind(new InetSocketAddress(this.port));
         System.out.println("Server is on port " + this.port);
 
+        updateScores();
+        setPlayMode();
 
-        // Infinite loop to start a new game after one ends
-        while (true) {
+        //System.out.println(BG_GREEN + "Creating New Lobby" + RESET);
 
-            updateScores();
+        // Getting lobby size from server manager
+        System.out.println("\"Enter\" for Lobby Size (2 or 3) or \"q\" to close server");
+        String lobbySizeInput = console.nextLine();
 
-            setPlayMode();
-
-            System.out.println(BG_GREEN + "Creating New Lobby" + RESET);
-
-            // Getting lobby size from server manager
-            System.out.println("\"Enter\" for Lobby Size (2 or 3) or \"q\" to close server");
-            String lobbySizeInput = console.nextLine();
-
-            // Checking if code is a quit event
-            if (lobbySizeInput.equals("q")) {
-                break;
-            }
-
-            Scanner scanner = new Scanner(System.in);
-            System.out.println("Enter Lobby Size: ");
-            String lobbySize = scanner.nextLine();
-
-            try{
-                if(parseInt(lobbySize) < 2 || parseInt(lobbySize) > 3){
-                    System.out.println(BG_YELLOW + "Invalid Lobby Size" + RESET);
-                    continue;
-                }
-            }
-            catch(NumberFormatException e){
-                System.out.println(BG_YELLOW + "Invalid Input" + RESET);
-                continue;
-            }
-
-
-
-            System.out.println("Waiting for client...");
-
-            int maxClients = 10;
-            startLobby(parseInt(lobbySize), maxClients);
-
+        // Checking if code is a quit event
+        if (lobbySizeInput.equals("q")) {
+            return;
         }
 
-        // Closing server after receiving quit event from user
-        System.out.println(BG_YELLOW + "Closing Server" + RESET);
-        console.close();
-        serverSocket.close();
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Enter Lobby Size: ");
+        String lobbySizeStr = scanner.nextLine();
 
+        try{
+            if(parseInt(lobbySizeStr) < 2 || parseInt(lobbySizeStr) > 3){
+                System.out.println(BG_YELLOW + "Invalid Lobby Size" + RESET);
+            }
+        }
+        catch(NumberFormatException e){
+            System.out.println(BG_YELLOW + "Invalid Input" + RESET);
+        }
+
+        //Ask server how many game instances it can handle
+        System.out.println("Enter the maximum number of lobbies running concurrently: ");
+        int maxLobbies = scanner.nextInt();
+
+
+        int lobbySize = parseInt(lobbySizeStr);
+
+        scheduler.scheduleAtFixedRate(() -> gameStart(lobbySize, maxLobbies), 0, 10, TimeUnit.MILLISECONDS);
+
+        // Infinite loop to accept new client connections
+        while (true) {
+
+
+            // Accept a new client connection
+            Socket socket = serverSocket.accept();
+            System.out.println("Waiting for client...");
+
+            // Handle the client connection in a new thread
+            new Thread(() -> {
+                try {
+                    // Authenticate the user
+                    Player player = authenticateUser(socket);
+
+                    // If the user is authenticated, add them to the list of players
+                    if (player != null) {
+                        lock.lock();
+                        try {
+                            players.add(player);
+
+                        } finally {
+                            lock.unlock();
+                        }
+                        System.out.println(player.getName() + " Joined");
+                        if (playMode == 2) {
+                            // Sort players by score
+                            lock.lock();
+                            try {
+                                players.sort(Comparator.comparingInt(Player::getLevel).reversed());
+                                //sort queue with players tokens
+                                queue.clear();
+                                for (Player p : players) {
+                                    for (String token : token_player_map.keySet()) {
+                                        if (token_player_map.get(token).getName().equals(p.getName())) {
+                                            queue.add(token);
+                                        }
+                                    }
+                                }
+                            } finally {
+                                lock.unlock();
+                            }
+                        }
+                        gameStart(lobbySize, maxLobbies);
+                    } else {
+                        System.out.println("Failed to authenticate user");
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }).start();
+
+
+        }
     }
 
+
+    public synchronized void gameStart(int lobbySize, int maxLobbies){
+        updateScores();
+        {
+            while (queue.size() >= lobbySize && activeGameCount.get() < maxLobbies) {
+                int gameID;
+                gameID = nextGameID++;
+                List<Player> matchedPlayers = new ArrayList<>();
+
+                //get lobbysize number of players from players list
+                for (int i = 0; i < lobbySize; i++) {
+
+                    //get token from queue
+                    String token = queue.poll();
+                    //remove token players.getFirst() from map
+
+                    Player matchedPlayer = token_player_map.get(token);
+                    matchedPlayers.add(matchedPlayer);
+                    //remove head from queue
+                    queue.remove(token);
+
+                }
+                GameThread gameThread = new GameThread(matchedPlayers, gameID);
+                activeGameCount.incrementAndGet();
+                executorService.execute(gameThread);
+            }
+        }}
     public void setPlayMode() {
         while (true){
             System.out.println("Choose a playing mode:");
@@ -147,73 +239,8 @@ public class Server {
             }
         }
     }
-    private void startLobby(int lobbySize, int maxClients) throws Exception {
 
-        //TODO: Add timeout for waiting for players to join
-
-        List<Player> tempPlayers = new ArrayList<>();
-
-        for (int i = 1; i <= 2; i++) {
-            //start wait timer
-            Player player = authenticateUser(); 
-            if (player != null) {
-                //players.add(player);
-                lock.lock();
-                try {
-                    players.add(player);
-                }
-                finally {
-                    lock.unlock();
-                }
-                System.out.println(player.getName() + " Joined");
-            } else {
-                System.out.println(BG_YELLOW + "Failed to authenticate user " + i + RESET);
-                return;
-            }
-        }
-        /*
-        lock.lock();
-        try {
-            players.addAll(tempPlayers);
-        }
-        finally {
-            lock.unlock();
-        }*/
-
-        if (playMode == 2) {
-            // Sort players by score
-            lock.lock();
-            try{
-                players.sort(Comparator.comparingInt(Player::getLevel).reversed());
-            }
-            finally {
-                lock.unlock();
-            }
-
-            //matchPlayers(players, lobbySize);
-        }
-
-
-        //split players into groups of lobbysize and start a new thread for each group
-        if (players.size() % lobbySize == 0) { //all players are assigned a lobby
-            for (int i = 0; i < players.size(); i += lobbySize) {
-                List<Player> matchedPlayers = players.subList(i, i + lobbySize);
-                new Thread(new Lobby(matchedPlayers)).start();
-            }
-        } else if (players.size() % lobbySize == 1) { //one player is left out
-            for (int i = 0; i < players.size() - 1; i += lobbySize) {
-                List<Player> matchedPlayers = players.subList(i, i + lobbySize);
-                new Thread(new Lobby(matchedPlayers)).start();
-            }
-        } else {
-            for (int i = 0; i < players.size() - 2; i += lobbySize) { //two players are left out
-                List<Player> matchedPlayers = players.subList(i, i + lobbySize);
-                new Thread(new Lobby(matchedPlayers)).start();
-            }
-        }
-    }
-
-
+/*
     private void matchPlayers(List<Player> players, int lobbySize) {
 
         if (lobbySize == 2) {
@@ -249,16 +276,15 @@ public class Server {
             }
         }
     }
-
+*/
     // Method to get a random word out of the listWords
     public String getWord() {
-        return words.get(0);
+        return words.get(random.nextInt(words.size())).toUpperCase();
     }
 
     // Starting the game with the given number of players
-    public void startGame(List<Player> numPlayers) {
-
-        players = Game.wordle(numPlayers, getWord());
+    public void startGame(List<Player> numPlayers, int gameID) {
+        players = Game.wordle(numPlayers, getWord(),gameID);
     }
 
 
@@ -378,9 +404,9 @@ public class Server {
         }
     }
 
-    public Player authenticateUser() throws IOException {
-        Socket socket = serverSocket.accept();
-        Socket userSocket = new Socket();
+    public Player authenticateUser(Socket socket) throws IOException {
+        //Socket socket = serverSocket.accept();
+        //Socket userSocket = new Socket();
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
         Player player = null;
@@ -443,13 +469,12 @@ public class Server {
             writer.println("User does not exist. Would you like to register? (y/n)");
             String response = in.readLine();
             if(response.equalsIgnoreCase("y")){
-                player = registerUser(socket);
-                return player;
+                return registerUser(socket);
             }
             else{
                 writer.println("You must be a registered user to play the game.");
                 //TODO:check if recursion works
-                authenticateUser();
+                authenticateUser(socket);
                 return null;
             }
         }
@@ -468,12 +493,12 @@ public class Server {
     public void updateScores() {
         //iterate through the hashmap and update the scores of the users
         for (User user : users) {
-            if (user_player_map.containsKey(user)) {
-                Player player = user_player_map.get(user);
-                //print the score of the player
-                System.out.println(player.getName() + " has a score of " + player.getScore());
-                user.setScore(player.getScore());
+            for (Player player : players) {
+                if (user.getUsername().equals(player.getName())) {
+                    user.setScore(player.getScore());
+                }
             }
+
         }
 
         try (BufferedWriter writer = new BufferedWriter(new FileWriter("../resources/users.txt"))) {
@@ -554,6 +579,7 @@ public class Server {
     }
 
     //attempt of avoiding slow clients
+    /*
     public void timeout(Socket socket) throws IOException {
         long previousTime = System.currentTimeMillis();
         long time;
@@ -573,7 +599,7 @@ public class Server {
             selector.selectedKeys().clear();
         }
     }
-
+*/
     //logout user, no longer authenticated
     private void logoutUser(User user) {
         lock.lock();
@@ -585,7 +611,6 @@ public class Server {
         }
     }
 
-    //---------------------------------------------------------------------
     // Token Generator
     public static class tokenGenerator {
         private SecureRandom random = new SecureRandom();

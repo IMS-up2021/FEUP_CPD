@@ -4,12 +4,19 @@ import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Game{
-    //static final int gameID;
+    private static int gameID;
 
+    public Game(int gameID) {
+        this.gameID = gameID;
+    }
+
+    public int getGameID() {
+        return gameID;
+    }
     // Create a lock
     private static final ReentrantLock lock = new ReentrantLock();
 
-    public static List<Player> wordle(List<Player> number_players, String word)  {
+    public static List<Player> wordle(List<Player> number_players, String word, int gameID)  {
 
         final String BG_GREEN = "\u001b[42m";
         final String BG_YELLOW = "\u001b[43m";
@@ -26,6 +33,17 @@ public class Game{
         //int attempts = 0;
         boolean winner = false;
         Set<Player> winningPlayers = new HashSet<>();
+
+        // Notify players of the game ID
+        for (Player player : number_players) {
+            try {
+                Socket socket = player.getSocket();
+                PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+                out.println("Game ID: " + gameID);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
 
         //6 guesses per player
         while(attemptsPerPlayer.values().stream().mapToInt(Integer::intValue).sum() < number_players.size() * 6 && !winner) {
@@ -99,6 +117,7 @@ public class Game{
             endMessage = "IT'S A TIE!";
         } else if (winningPlayers.size() == 1) {
             endMessage = "YOU WON!";
+
         }
 
         for (Player player: number_players){
